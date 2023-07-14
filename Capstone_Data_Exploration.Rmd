@@ -1,0 +1,251 @@
+---
+title: "Capstone_data_exploration"
+author: "Hunter_Davis"
+date: "2023-07-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This document shows the steps taken to explore the **Chicago Cyclistic bike-share** data set from April 2022 to March 2023. Data set can be found at <https://divvy-tripdata.s3.amazonaws.com/index.html>.
+
+# Cleaned csv files in Excel.
+
+-   Pulled CSV files from [divvy_trips](https://divvy-tripdata.s3.amazonaws.com/index.html) webpage from April 2022 to March 2023.
+
+-   Reformatted dates/times of columns **started_at** and **ended_at** to "MM/DD/YYYY HH:MM:SS".
+
+-   Calculated individual trips ride lengths.
+
+-   Determined the day of the week that each trip started on with the function =WEEKDAY()(1 = Sunday...7 = Saturday)
+
+-   Finally calculated ride count by weekday, ride count by membership status, and average ride length for each day of the week by membership status and weekly average ride length in new pivot tables.
+
+```{r load data, include = FALSE}
+load("everything.RData")
+```
+
+### Ride count by weekday
+
+```{r display data, echo=FALSE}
+ride_count_weekday
+```
+
+### Ride count by Membership status
+
+```{r display data2, echo=FALSE}
+ride_count_membership
+```
+
+### Average ride length by membership and weekday
+
+```{r display data3, echo=FALSE}
+avg_ride_len
+```
+
+# R Studio
+
+## Installing and loading needed packages in R Studio
+
+```{r load packages, eval=TRUE, echo=TRUE}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+```
+
+### Collect and wrangle data
+
+In the interest of reducing the document length I will only include the data lines for one data frame from the full year.
+
+The below R code shows the process I took to collect each spreadsheet and load them into a data frame within the global environment.
+
+```{r data collection, eval=TRUE, echo=TRUE}
+Apr_22 <- read.csv("E:/Cleaned_CSV/202204-divvy-tripdata.csv")
+```
+
+I standardized each data frame's column names.
+
+```{r data collection2, eval=TRUE, results='hide'}
+(Apr_22 <- rename(Apr_22
+                  ,ride_len = Ride_Length
+                  ,ride_len_sec = ride_len_seconds
+                  ,mode_day = Mode_Day
+                  ,max_ride_len = Max_Ride_len
+                  ,avg_ride_len = Average_Ride_Length
+                  ,day_of_week = Day_of_Week..1...Sunday..7...Saturday.))
+```
+
+Checked each data frame to ensure standardization.
+
+```{r data collection3, eval=TRUE, echo=TRUE}
+colnames(Apr_22)
+```
+
+Checked data frames columns for matching data type.
+
+```{r data collection4, eval=TRUE, echo=TRUE}
+str(Apr_22)
+```
+
+In my original analysis **ride_len_sec** column was a *character* variable type and needed to be converted to an int variable to continue my analysis.
+
+```{r data collection5, eval=FALSE, echo=TRUE}
+is.character(Aug_22$ride_len_sec)  ## verified variable type.
+Aug_22$ride_len_sec <- as.integer(as.character(Aug_22$ride_len_sec))
+is.integer(Aug_22$ride_len_sec)   ## verified change to variable type.
+```
+
+Once all the data frames contained the same column names and matching variable types I combined them all into one new data frame.
+
+```{r data combination, eval=TRUE, results='hide'}
+all_trips <- bind_rows(Apr_22,May_22,Jun_22,Jul_22,Aug_22
+                       ,Sep_22,Dec_22,Jan_23,Feb_23,Mar_23)
+```
+
+After combining each months data frame into one new data frame I explored more of the data.
+
+```{r, data explore2}
+colnames(all_trips)
+```
+
+```{r data explore3}
+nrow(all_trips)
+```
+
+```{r data explore4}
+dim(all_trips)
+```
+
+```{r data explore5}
+head(all_trips)
+```
+
+```{r data explore6}
+tail(all_trips)
+```
+
+```{r data explore7}
+str(all_trips)
+```
+
+The summary data showed me that the **ride_len_sec** column had an abundance of NA values which I will clean up in a later step.
+
+```{r data explore8}
+summary(all_trips)
+```
+
+Found the distribution of membership status (members vs. casual users).
+
+```{r data explore10}
+table(all_trips$member_casual)
+```
+
+Removed unnecessary columns from the data frame.
+
+```{r data explore, eval=TRUE, results='hide'}
+all_trips <- all_trips %>%
+  select(-c(start_lat, start_lng, end_lat, end_lng))
+```
+
+```{r data explore9}
+colnames(all_trips)
+```
+
+Made the date into a format that is easier to use for potential analysis.
+
+```{r data format, eval=TRUE, results='hide'}
+all_trips$date <- format(as.Date(all_trips$started_at, '%m/%d/%Y'), '%d/%m/%Y')
+all_trips$day <- format(as.Date(all_trips$date, '%d/%m/%Y'), "%d")
+all_trips$month <- format(as.Date(all_trips$date, '%d/%m/%Y'), "%m")
+all_trips$year <- format(as.Date(all_trips$date, '%d/%m/%Y'), "%Y")
+all_trips$day_of_week_1 <- format(as.Date(all_trips$date, '%d/%m/%Y'), "%A")
+```
+
+```{r data format head}
+head(all_trips)
+```
+
+Created a new data frame excluding the companies quality checks from column **start_station_name**, and any bad values in the **ride_length** column (Na's, and Negative numbers) from the new data frame.
+
+```{r removing NA, eval=FALSE,results='hide'}
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+```
+
+Summarized ride lengths in seconds.
+
+```{r summary data}
+summary(all_trips_v2$ride_len_sec)
+```
+
+Used the aggregate function to show the average ride length in seconds for each membership class. 
+
+```{r Aggregate}
+aggregate(all_trips_v2$ride_len_sec ~ all_trips_v2$member_casual + all_trips_v2$day_of_week_1, FUN = mean)
+```
+
+Renamed **weekday** column to **wday** to remove confusion with a variable in the next step.
+
+```{r, wday, eval=FALSE}
+(all_trips_v2 <- rename(all_trips_v2
+                        ,wday = weekday))
+```
+
+Summarized the number of rides and ride lengths by membership status and weekday.
+
+```{r final sum,}
+all_trips_v2 %>% 
+  mutate(weekday = wday(date, label = TRUE)) %>%  
+  group_by(member_casual, weekday) %>%  
+  summarise(number_of_rides = n()							 
+            ,average_duration = mean(ride_len_sec)) %>% 		
+  arrange(member_casual, weekday)
+```
+
+Created a visualization with ggplot2 for a more visually appealing version of the above data.
+
+```{r ggplot, eval=FALSE}
+all_trips_v2 %>% 
+  mutate(weekday = wday(date, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_len_sec)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = number_of_rides, y = weekday, fill = member_casual)) +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(title = "Chicago Cyclistic Dataset") +
+  labs(subtitle = "Data Range: April 2022 - March 2023") +
+  labs(caption = "Data sourced from https://divvy-tripdata.s3.amazonaws.com/index.html") +
+  labs(x = "Number of Rides") +
+  labs(y = "Weekday") +
+  guides(fill=guide_legend(title="User Type")) +
+  theme(legend.position="top",legend.justification="right") +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = number_of_rides), position = position_dodge(width = 0.9), hjust = 2) +
+  theme(axis.text.x = element_text(angle = 35, size = 10))
+```
+![Chicago Cyclistic ride count by membership and weekday](Chicago_trips_data.png){wdith="50%"}
+
+Found the average ride length by membership status given the day of the week.
+
+```{r duration}
+aggregate(all_trips_v2$ride_len_sec ~ all_trips_v2$member_casual + all_trips_v2$day_of_week_1, FUN = mean)
+```
+
+Finally created a visualization in Tableau of the above aggregated data.
+
+
+###############
+
+<div class='tableauPlaceholder' id='viz1689339149565' style='position: relative'><noscript><a href='#'><img alt='Chicago Cyclistic bike-share 2022-2023 ' src='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Go&#47;GoogleCertCapstonetrips&#47;Sheet1&#47;1_rss.png' style='border: none' /></a></noscript><object class='tableauViz'  style='display:none;'><param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> <param name='embed_code_version' value='3' /> <param name='site_root' value='' /><param name='name' value='GoogleCertCapstonetrips&#47;Sheet1' /><param name='tabs' value='no' /><param name='toolbar' value='yes' /><param name='static_image' value='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Go&#47;GoogleCertCapstonetrips&#47;Sheet1&#47;1.png' /> <param name='animate_transition' value='yes' /><param name='display_static_image' value='yes' /><param name='display_spinner' value='yes' /><param name='display_overlay' value='yes' /><param name='display_count' value='yes' /><param name='language' value='en-US' /></object></div>                
+
+```{js tableau viz, echo=FALSE}                    
+var divElement = document.getElementById('viz1689339149565');                    
+var vizElement = divElement.getElementsByTagName('object')[0];                    vizElement.style.width='100%';
+vizElement.style.height=(divElement.offsetWidth*0.75)+'px';                    
+var scriptElement = document.createElement('script');                    
+scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';                 vizElement.parentNode.insertBefore(scriptElement, vizElement);                
+```
+
